@@ -121,6 +121,7 @@ public:
         for (int i=0; i<N; i++)
             for (int j=0; j<i; j++)
                 c += H[i][j];
+        double e = max(0.01, this->e);
 
         double maxp = -1.;
         int maxi = 0;
