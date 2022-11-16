@@ -5,6 +5,7 @@
 #include <set>
 #include <utility>
 #include <cstdio>
+#include <algorithm>
 using namespace std;
 
 class Transcoder {
@@ -13,19 +14,60 @@ public:
     virtual int decode(vector<vector<int>> H) = 0;
 };
 
+// 固定で0
 class TranscoderFixed: public Transcoder
 {
 public:
     vector<vector<vector<int>>> init(int M, double e)
     {
         int N = 4;
-        vector<vector<vector<int>>> G(100, vector<vector<int>>(N, vector<int>(N)));
+        vector<vector<vector<int>>> G(M, vector<vector<int>>(N, vector<int>(N)));
         return G;
     }
 
     int decode(vector<vector<int>> H)
     {
         return 0;
+    }
+};
+
+// 辺の本数にエンコード
+class TranscoderEdgeNum: public Transcoder
+{
+    int N = 0;
+    int M = 0;
+
+public:
+    vector<vector<vector<int>>> init(int M, double e)
+    {
+        this->M = M;
+
+        N = 0;
+        while (N*(N-1)/2+1<M)
+            N++;
+
+        vector<vector<vector<int>>> G(M, vector<vector<int>>(N, vector<int>(N)));
+        for (int i=0; i<M; i++)
+        {
+            int c = 0;
+            for (int j=0; j<N && c<i; j++)
+                for (int k=0; k<j && c<i; k++)
+                {
+                    G[i][j][k] = G[i][k][j] = 1;
+                    c++;
+                }
+        }
+
+        return G;
+    }
+
+    int decode(vector<vector<int>> H)
+    {
+        int c = 0;
+        for (int i=0; i<N; i++)
+            for (int j=0; j<i; j++)
+                c += H[i][j];
+        return min(M-1, c);
     }
 };
 
@@ -101,8 +143,9 @@ void test(Transcoder *transcoder)
 
 int main()
 {
-    TranscoderFixed fixed;
-    Transcoder *transcoder = &fixed;
+    //TranscoderFixed fixed;
+    TranscoderEdgeNum edge;
+    Transcoder *transcoder = &edge;
 
 #ifdef WIN32
     test(transcoder);
@@ -114,7 +157,7 @@ int main()
     vector<vector<vector<int>>> G = transcoder->init(M, e);
     int N = G[0].size();
     cout<<N<<endl;
-    for (int i=0; i<100; i++)
+    for (int i=0; i<M; i++)
     {
         string g;
         for (int j=0; j<N; j++)
