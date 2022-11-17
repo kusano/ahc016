@@ -194,21 +194,9 @@ public:
 
     int decode(vector<vector<int>> H)
     {
-        vector<int> C(N, 2);
-        C[0] = 0;
-        for (int i=0; i<N; i++)
-            if (H[0][i]!=0)
-                C[i] = 0;
-        int t = 0;
-        for (int i=0; i<N; i++)
-            if (C[i]==2)
-                t = i;
-        C[t] = 1;
-        for (int i=0; i<N; i++)
-            if (H[t][i]!=0)
-                C[i] = 1;
+        vector<int> C(N);
 
-        for (int iter=0; iter<32; iter++)
+        for (int iter=0; iter<16; iter++)
         {
             for (int i=0; i<N; i++)
             {
