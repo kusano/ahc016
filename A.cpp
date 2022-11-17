@@ -155,25 +155,48 @@ class TranscoderCluster3: public Transcoder
 {
     int M = 0;
     double e = 0.;
-    int N = 0;
     vector<vector<int>> CS;
 
 public:
+    int N = 100;
+
     vector<vector<vector<int>>> init(int M, double e)
     {
         this->M = M;
         this->e = e;
-        N = 100;
 
+        int NT[11][11] = {
+            {11, 16, 19, 22, 25, 27, 29, 31, 33, 35},
+            {13, 16, 19, 22, 25, 27, 29, 32, 33, 35},
+            {15, 18, 20, 23, 27, 27, 30, 32, 33, 36},
+            {25, 23, 26, 27, 29, 31, 34, 35, 37, 35},
+            {30, 32, 35, 32, 40, 36, 40, 39, 38, 45},
+            {43, 41, 47, 47, 48, 44, 52, 53, 53, 55},
+            {56, 59, 66, 63, 73, 64, 75, 66, 70, 67},
+            {92, 89, 98, 96, 99, 92, 99, 99, 98, 97},
+            {98, 100, 99, 96, 100, 98, 100, 100, 99, 99},
+            {11, 99, 99, 96, 99, 98, 97, 96, 100, 100},
+            {12, 16, 22, 23, 25, 27, 30, 31, 33, 37},
+        };
+        int ei = int(e*100+.5);
+        N = NT[(ei+3)/4][M/10];
+
+        // TODO: M種類のグラフを作れなくても、Nを小さくしたほうが良い場合もあるかも
         CS.clear();
-        for (int i=1; i<N; i++)
-            for (int j=1; i+j<N; j++)
-                if (i<=j && j<=N-i-j)
-                    CS.push_back({i, j, N-i-j});
-        // 最小のクラスタが大きいほど良い
-        sort(CS.begin(), CS.end(), [](vector<int> &a, vector<int>&b) {
-            return a[0]>b[0] || a[0]==b[0] && a[1]>b[1];
-        });
+        while (true)
+        {
+            for (int i=1; i<N; i++)
+                for (int j=1; i+j<N; j++)
+                    if (i<=j && j<=N-i-j)
+                        CS.push_back({i, j, N-i-j});
+            // 最小のクラスタが大きいほど良い
+            sort(CS.begin(), CS.end(), [](vector<int> &a, vector<int>&b) {
+                return a[0]>b[0] || a[0]==b[0] && a[1]>b[1];
+            });
+            if ((int)CS.size()>=M)
+                break;
+            N++;
+        }
         CS.resize(M);
 
         vector<vector<vector<int>>> G;
@@ -339,6 +362,65 @@ public:
     }
 };
 
+void param_search()
+{
+    mt19937 rand;
+    rand.seed(1234);
+
+    TranscoderCluster3 transcoder;
+
+    for (int M=10; M<=100; M+=10)
+        for (int ei=0; ei<=40; ei+=4)
+        {
+            double e = ei*.01;
+
+            long long bestScore = 0;
+            int bestN = 0;
+
+            for (int N=4; N<=100; N++)
+            {
+                transcoder.N = N;
+
+                vector<vector<vector<int>>> G = transcoder.init(M, e);
+                long long score = 0;
+                int Esum = 0;
+                if (!G.empty())
+                {
+                    for (int i=0; i<10; i++)
+                    {
+                        int N = (int)G[0].size();
+                        int E = 0;
+
+                        for (int j=0; j<100; j++)
+                        {
+                            int s = rand()%M;
+                            vector<vector<int>> H = G[s];
+                            for (int k=0; k<N; k++)
+                                for (int l=0; l<k; l++)
+                                    if (int(rand()%100)<ei)
+                                    {
+                                        H[k][l] ^= 1;
+                                        H[l][k] ^= 1;
+                                    }
+                            int ans = transcoder.decode(H);
+                            if (ans!=s)
+                                E++;
+                        }
+                        score += (long long)(1e9*pow(0.9, E)/N+.5);
+                        Esum += E;
+                    }
+                }
+                //printf("M = %d e = %.2f N = %d score = %lld Esum = %d\n", M, e, N, score, Esum);
+                if (score>bestScore)
+                {
+                    bestScore = score;
+                    bestN = N;
+                }
+            }
+            printf("%d %.2f %d\n", M, e, bestN);
+        }
+}
+
 void test(Transcoder *transcoder)
 {
     const int T = 50;
@@ -413,12 +495,15 @@ void test(Transcoder *transcoder)
 
 int main()
 {
+    //param_search();
+    //return 0;
+
     //TranscoderFixed fixed;
     //TranscoderEdgeNum edge;
     //TranscoderEdgeNum100 edge100;
-    //TranscoderCluster3 cluster3;
-    TranscoderCluster2 cluster2;
-    Transcoder *transcoder = &cluster2;
+    TranscoderCluster3 cluster3;
+    //TranscoderCluster2 cluster2;
+    Transcoder *transcoder = &cluster3;
 
 #ifdef WIN32
     test(transcoder);
