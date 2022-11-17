@@ -225,6 +225,8 @@ public:
     // エラーが起こらないことを期待するモード
     bool exact = false;
     int N = 0;
+    // クラスタサイズの間隔
+    int CSint = 0;
 
     vector<vector<vector<int>>> init(int M, double e)
     {
@@ -253,6 +255,14 @@ public:
             };
             int ei = int(e*100+.5);
             N = NT[(ei+3)/4][M/10];
+
+            CSint = 1;
+
+            if (ei>=30 && M<=50)
+            {
+                N = 100;
+                CSint = 3;
+            }
         }
 
         if (exact)
@@ -275,7 +285,7 @@ public:
         {
             for (int i=1; i<N; i++)
                 for (int j=1; i+j<N; j++)
-                    if (i<=j && j<=N-i-j)
+                    if (i<=j && j<=N-i-j && i%CSint==0 && j%CSint==0)
                         CS.push_back({i, j, N-i-j});
             // 最小のクラスタが大きいほど良い
             sort(CS.begin(), CS.end(), [](vector<int> &a, vector<int>&b) {
@@ -480,11 +490,14 @@ void param_search()
 
             long long bestScore = 0;
             int bestN = 0;
+            int bestCSint = 0;
 
+            for (int CSint=1; CSint<=3; CSint+=2)
             for (int N=4; N<=101; N++)
             {
-                transcoder.N = N;
                 transcoder.exact = N==101;
+                transcoder.N = N;
+                transcoder.CSint = CSint;
 
                 vector<vector<vector<int>>> G = transcoder.init(M, e);
                 long long score = 0;
@@ -515,14 +528,15 @@ void param_search()
                         Esum += E;
                     }
                 }
-                //printf("M = %d e = %.2f N = %d score = %lld Esum = %d\n", M, e, N, score, Esum);
+                //printf("M = %d e = %.2f N = %d Csint = %d score = %lld Esum = %d\n", M, e, N, CSint, score, Esum);
                 if (score>bestScore)
                 {
                     bestScore = score;
                     bestN = N;
+                    bestCSint = CSint;
                 }
             }
-            printf("%d %.2f %d %lld\n", M, e, bestN, bestScore);
+            printf("%d %.2f %d %d %lld\n", M, e, bestN, bestCSint, bestScore);
         }
 }
 
