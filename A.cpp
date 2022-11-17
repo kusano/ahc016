@@ -530,15 +530,15 @@ void test(Transcoder *transcoder)
 {
     const int T = 50;
 
-    mt19937 rand;
-    rand.seed(1234);
-
     long long total = 0LL;
 
     set<pair<int, int>> used;
 
     for (int i=0; i<T; i++)
     {
+        mt19937 rand;
+        rand.seed(i);
+
         int M;
         int ei;
         while (true)
