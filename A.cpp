@@ -350,6 +350,49 @@ public:
     }
 };
 
+// トランスコーダーを使い分ける
+class TranscoderIntegrate: public Transcoder
+{
+    TranscoderFixed fixed;
+    TranscoderEdge edge;
+    TranscoderCluster3 cluster3;
+    TranscoderExact exact;
+
+public:
+    bool tuning = false;
+    int id = 0;
+    Transcoder *trans = nullptr;
+
+    vector<vector<vector<int>>> init(int M, double e)
+    {
+        if (tuning)
+        {
+            switch (id) {
+            case 0: trans = &fixed; break;
+            case 1: trans = &edge; break;
+            case 2: trans = &cluster3; break;
+            case 3: trans = &exact; break;
+            }
+        }
+        else
+        {
+            if (e==0.0 ||
+                abs(e-0.01)<1e-8 && M<=34 ||
+                abs(e-0.02)<1e-8 && M<=11)
+                trans = &exact;
+            else
+                trans = &cluster3;
+        }
+
+        return trans->init(M, e);
+    }
+
+    int decode(vector<vector<int>> H)
+    {
+        return trans->decode(H);
+    }
+};
+
 void param_search()
 {
     mt19937 rand;
@@ -520,7 +563,8 @@ int main()
     TranscoderEdge edge;
     TranscoderCluster3 cluster3;
     TranscoderExact exact;
-    Transcoder *transcoder = &cluster3;
+    TranscoderIntegrate integrate;
+    Transcoder *transcoder = &integrate;
 
 #ifdef WIN32
     test(transcoder);
