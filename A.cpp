@@ -206,8 +206,6 @@ class TranscoderCluster3: public Transcoder
 public:
     // パラメタを外部から与える
     bool tuning = false;
-    // エラーが起こらないことを期待するモード
-    bool exact = false;
     int N = 0;
     // クラスタサイズの間隔
     int CSint = 0;
@@ -219,11 +217,6 @@ public:
 
         if (!tuning)
         {
-            exact =
-                e==0.0 ||
-                abs(e-0.01)<1e-8 && M<=34 ||
-                abs(e-0.02)<1e-8 && M<=11;
-
             int NT[11][11] = {
                 {11, 16, 19, 22, 25, 27, 29, 31, 33, 35},
                 {13, 16, 19, 22, 25, 27, 29, 32, 33, 35},
@@ -247,18 +240,6 @@ public:
                 N = 100;
                 CSint = 3;
             }
-        }
-
-        if (exact)
-        {
-            N = 0;
-            while ((int)uniqueGraphs[N].size()<M)
-                N++;
-
-            vector<vector<vector<int>>> G;
-            for (int i=0; i<M; i++)
-                G.push_back(from_string(uniqueGraphs[N][i]));
-            return G;
         }
 
         // TODO: M種類のグラフを作れなくても、Nを小さくしたほうが良い場合もあるかも
@@ -299,15 +280,6 @@ public:
 
     int decode(vector<vector<int>> H)
     {
-        if (exact)
-        {
-            string g = to_string(normalize(H));
-            for (int i=0; i<M; i++)
-                if (uniqueGraphs[N][i]==g)
-                    return i;
-            return 0;
-        }
-
         vector<int> C(N);
 
         for (int iter=0; iter<16; iter++)
@@ -348,6 +320,36 @@ public:
     }
 };
 
+// エラーが起こらないと仮定する
+class TranscoderExact: public Transcoder
+{
+    int M = 0;
+    int N = 0;
+public:
+
+    vector<vector<vector<int>>> init(int M, double e)
+    {
+        this->M = M;
+        N = 0;
+        while ((int)uniqueGraphs[N].size()<M)
+            N++;
+
+        vector<vector<vector<int>>> G;
+        for (int i=0; i<M; i++)
+            G.push_back(from_string(uniqueGraphs[N][i]));
+        return G;
+    }
+
+    int decode(vector<vector<int>> H)
+    {
+        string g = to_string(normalize(H));
+        for (int i=0; i<M; i++)
+            if (uniqueGraphs[N][i]==g)
+                return i;
+        return 0;
+    }
+};
+
 void param_search()
 {
     mt19937 rand;
@@ -368,7 +370,7 @@ void param_search()
             for (int CSint=1; CSint<=3; CSint+=2)
             for (int N=4; N<=101; N++)
             {
-                transcoder.exact = N==101;
+                //transcoder.exact = N==101;
                 transcoder.N = N;
                 transcoder.CSint = CSint;
 
@@ -514,9 +516,10 @@ int main()
     //make_graph();
     //return 0;
 
-    //TranscoderFixed fixed;
-    //TranscoderEdge edge;
+    TranscoderFixed fixed;
+    TranscoderEdge edge;
     TranscoderCluster3 cluster3;
+    TranscoderExact exact;
     Transcoder *transcoder = &cluster3;
 
 #ifdef WIN32
