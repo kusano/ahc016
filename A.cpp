@@ -475,6 +475,107 @@ public:
     }
 };
 
+// 完全グラフをノードにしたグラフを作る
+class TranscoderSuperGraph: public Transcoder
+{
+    int M = 0;
+    double e = 0.;
+    int N;
+
+public:
+
+    vector<vector<vector<int>>> init(int M, double e)
+    {
+        this->M = M;
+        this->e = e;
+        N = 96;
+
+        vector<vector<vector<int>>> G(M, vector<vector<int>>(N, vector<int>(N)));
+
+        for (int m=0; m<M; m++)
+        {
+            // ノード用の完全グラフ
+            for (int i=0; i<6; i++)
+                for (int j=0; j<16; j++)
+                    for (int k=0; k<j; k++)
+                        G[m][i*16+j][i*16+k] = G[m][i*16+k][i*16+j] = 1;
+
+            // ノード間
+            vector<vector<int>> H(6, vector<int>(6));
+            for (int i=0; i<6; i++)
+                for (int j=0; j<6; j++)
+                    H[i][j] = uniqueGraphs[6][m][i*6+j]-'0';
+
+            for (int i=0; i<6; i++)
+                for (int j=0; j<i; j++)
+                    if (H[i][j]!=0)
+                        for (int k=0; k<16; k++)
+                            for (int l=0; l<2; l++)
+                                G[m][i*16+k][j*16+(k+l)%16] = G[m][j*16+(k+l)%16][i*16+k] = 1;
+        }
+
+        return G;
+    }
+
+    int decode(vector<vector<int>> H)
+    {
+        vector<int> C(N);
+        vector<int> num(6);
+        for (int c: C)
+            num[c]++;
+
+        for (int iter=0; iter<16; iter++)
+        {
+            for (int i=0; i<N; i++)
+            {
+                num[C[i]]--;
+
+                int ms = -9999;
+                int mc = 0;
+                for (int c=0; c<6; c++)
+                {
+                    int s = -num[c];
+                    for (int j=0; j<N; j++)
+                        if (j!=i)
+                            if (H[i][j]==0 && c!=C[j])
+                                s++;
+                    if (s>ms)
+                    {
+                        ms = s;
+                        mc = c;
+                    }
+                }
+                C[i] = mc;
+                num[C[i]]++;
+            }
+        }
+
+        vector<vector<int>> G(6, vector<int>(6));
+        for (int i=0; i<N; i++)
+            for (int j=0; j<N; j++)
+                if (H[i][j]!=0)
+                    G[C[i]][C[j]]++;
+        for (int i=0; i<6; i++)
+            for (int j=0; j<6; j++)
+                if (G[i][j]>=80)
+                    G[i][j] = 1;
+                else
+                    G[i][j] = 0;
+        for (int i=0; i<6; i++)
+            G[i][i] = 0;
+        G = normalize(G);
+
+        string g;
+        for (int i=0; i<6; i++)
+            for (int j=0; j<6; j++)
+                g += "01"[G[i][j]];
+        for (int i=0; i<M; i++)
+            if (uniqueGraphs[6][i]==g)
+                return i;
+        return 0;
+    }
+};
+
 void param_search()
 {
     mt19937 rand;
@@ -652,6 +753,7 @@ int main()
     //TranscoderEdgeNum100 edge100;
     TranscoderCluster3 cluster3;
     //TranscoderCluster2 cluster2;
+    //TranscoderSuperGraph super;
     Transcoder *transcoder = &cluster3;
 
 #ifdef WIN32
