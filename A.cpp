@@ -94,6 +94,26 @@ vector<vector<int>> from_string(string g)
     return G;
 }
 
+vector<vector<int>> shuffle_graph(vector<vector<int>> G, mt19937 *rand)
+{
+    int N = (int)G.size();
+    vector<int> P(N);
+    for (int i=0; i<N; i++)
+        P[i] = i;
+    for (int i=0; i<N; i++)
+        swap(P[i], P[(*rand)()%(N-i)+i]);
+
+    vector<vector<int>> G2(N, vector<int>(N));
+    for (int k=0; k<N; k++)
+        for (int l=0; l<k; l++)
+            if (G[P[k]][P[l]]!=0)
+            {
+                G2[k][l] = 1;
+                G2[l][k] = 1;
+            }
+    return G2;
+}
+
 class Transcoder {
 public:
     virtual vector<vector<vector<int>>> init(int M, double e) = 0;
@@ -477,6 +497,7 @@ void param_search()
                                 H[k][l] ^= 1;
                                 H[l][k] ^= 1;
                             }
+                    H = shuffle_graph(H, &rand);
                     int ans = transcoder->decode(H);
                     if (ans!=s)
                         E++;
@@ -547,7 +568,7 @@ void param_search()
     TranscoderIntegrate transcoder;
     transcoder.tuning = true;
 
-    for (int ei=0; ei<=40; ei++)
+    for (int ei=40; ei<=40; ei++)
     {
         for (int M=10; M<=100; M++)
         {
@@ -610,31 +631,17 @@ void test(Transcoder *transcoder)
         for (int j=0; j<100; j++)
         {
             int s = rand()%M;
-            vector<vector<int>> H1 = G[s];
+            vector<vector<int>> H = G[s];
             for (int k=0; k<N; k++)
                 for (int l=0; l<k; l++)
                     if (int(rand()%100)<ei)
                     {
-                        H1[k][l] ^= 1;
-                        H1[l][k] ^= 1;
+                        H[k][l] ^= 1;
+                        H[l][k] ^= 1;
                     }
+            H = shuffle_graph(H, &rand);
 
-            vector<int> P(N);
-            for (int i=0; i<N; i++)
-                P[i] = i;
-            for (int i=0; i<N; i++)
-                swap(P[i], P[rand()%(N-i)+i]);
-
-            vector<vector<int>> H2(N, vector<int>(N));
-            for (int k=0; k<N; k++)
-                for (int l=0; l<k; l++)
-                    if (H1[P[k]][P[l]]!=0)
-                    {
-                        H2[k][l] = 1;
-                        H2[l][k] = 1;
-                    }
-
-            int ans = transcoder->decode(H2);
+            int ans = transcoder->decode(H);
             if (ans!=s)
                 E++;
 
