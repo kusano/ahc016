@@ -8,6 +8,34 @@
 #include <algorithm>
 using namespace std;
 
+const int expN = 1024;
+const double expX = 16;
+int expT[expN];
+
+void my_exp_init()
+{
+    for (int x=0; x<expN; x++)
+    {
+        double x2 = (double)-x/expN*expX;
+        double e = exp(x2)*0x80000000+.5;
+        if (e>=0x7fffffff)
+            expT[x] = 0x7fffffff;
+        else
+            expT[x] = int(e);
+    }
+}
+
+//  exp(t)*0x80000000;
+int my_exp(double x)
+{
+    int x2 = int(x/-expX*expN+.5);
+    if (x2<0)
+        return expT[0];
+    if (x2>=expN)
+        return expT[expN-1];
+    return expT[x2];
+}
+
 vector<vector<string>> uniqueGraphs = {
     {}, {}, {}, {},
     {
@@ -382,6 +410,174 @@ public:
     }
 };
 
+// 完全グラフをノードにしたグラフを作る
+class TranscoderSuperGraph: public Transcoder
+{
+    int M = 0;
+    double e = 0.;
+    int N = 0;
+
+    // 埋め込んだグラフのサイズ
+    int N2 = 0;
+    // 頂点あたりのノード数
+    int VN = 0;
+
+    mt19937 rand;
+
+public:
+
+    vector<vector<vector<int>>> init(int M, double e)
+    {
+        this->M = M;
+        this->e = e;
+
+        N2 = 0;
+        while ((int)uniqueGraphs[N2].size()<M)
+            N2++;
+        VN = 100/N2;
+        N = VN*N2;
+
+        vector<vector<vector<int>>> G(M, vector<vector<int>>(N, vector<int>(N)));
+
+        for (int m=0; m<M; m++)
+        {
+            vector<vector<int>> H = from_string(uniqueGraphs[N2][uniqueGraphs[N2].size()-m-1]);
+
+            for (int i=0; i<N2; i++)
+                for (int j=0; j<VN; j++)
+                    for (int k=0; k<N2; k++)
+                        for (int l=0; l<VN; l++)
+                            if (H[i][k]!=0)
+                                G[m][i*VN+j][k*VN+l] = 1;
+            for (int i=0; i<N; i++)
+                G[m][i][i] = 0;
+        }
+
+        return G;
+    }
+
+    int decode(vector<vector<int>> H)
+    {
+        vector<int> C(N, -1);
+        for (int c=0; c<N2; c++)
+        {
+            vector<int> S(N);
+            for (int i=0; i<N; i++)
+                if (C[i]==-1)
+                {
+                    C[i] = c;
+                    S = H[i];
+                    break;
+                }
+            for (int i=1; i<VN; i++)
+            {
+                int mind = 99999999;
+                int minv = 0;
+                for (int j=0; j<N; j++)
+                    if (C[j]==-1)
+                    {
+                        int d = 0;
+                        for (int k=0; k<N; k++)
+                            d += abs(S[k]-H[j][k]*i);
+                        if (d<mind)
+                        {
+                            mind = d;
+                            minv = j;
+                        }
+                    }
+                C[minv] = c;
+                for (int j=0; j<N; j++)
+                    if (C[j]!=c)
+                        S[j] += H[minv][j];
+                S[minv] = 0;
+            }
+        }
+
+        vector<vector<int>> CM(N2, vector<int>(N2));
+        for (int i=0; i<N; i++)
+            for (int j=0; j<N; j++)
+                CM[C[i]][C[j]] += H[i][j];
+
+        int T = 1000;
+        for (int i=0; i<T; i++)
+        {
+            int a = rand()%N;
+            int b = rand()%N;
+            if (C[a]==C[b])
+                continue;
+
+            int o = 0;
+            for (int j=0; j<N2; j++)
+            {
+                o += min(CM[C[a]][j], VN*VN-CM[C[a]][j]);
+                o += min(CM[C[b]][j], VN*VN-CM[C[b]][j]);
+            }
+            vector<int> Da(N2), Db(N2);
+            for (int j=0; j<N; j++)
+            {
+                Da[C[j]] -= H[a][j];
+                Db[C[j]] -= H[b][j];
+                Da[C[j]] += H[b][j];
+                Db[C[j]] += H[a][j];
+            }
+            int n = 0;
+            for (int j=0; j<N2; j++)
+            {
+                n += min(CM[C[a]][j]+Da[j], VN*VN-CM[C[a]][j]-Da[j]);
+                n += min(CM[C[b]][j]+Db[j], VN*VN-CM[C[b]][j]-Db[j]);
+            }
+
+            if (n<o ||
+                my_exp((double)((o-n)*T*10)/(T-i))>int(rand()&0x7fffffff))
+            {
+                for (int j=0; j<N; j++)
+                {
+                    CM[C[a]][C[j]] -= H[a][j];
+                    CM[C[j]][C[a]] -= H[a][j];
+                    CM[C[b]][C[j]] -= H[b][j];
+                    CM[C[j]][C[b]] -= H[b][j];
+                }
+                swap(C[a], C[b]);
+                for (int j=0; j<N; j++)
+                {
+                    CM[C[a]][C[j]] += H[a][j];
+                    CM[C[j]][C[a]] += H[a][j];
+                    CM[C[b]][C[j]] += H[b][j];
+                    CM[C[j]][C[b]] += H[b][j];
+                }
+            }
+        }
+
+        //for (int i=0; i<N; i++)
+        //{
+        //    for (int j=0; j<N; j++)
+        //        cout<<" #"[H[i][j]];
+        //    cout<<endl;
+        //}
+        //cout<<endl;
+
+        vector<vector<int>> G(N2, vector<int>(N2));
+        for (int i=0; i<N; i++)
+            for (int j=0; j<N; j++)
+                if (H[i][j]!=0)
+                    G[C[i]][C[j]]++;
+        for (int i=0; i<N2; i++)
+            for (int j=0; j<N2; j++)
+                if (G[i][j]>=VN*VN/2)
+                    G[i][j] = 1;
+                else
+                    G[i][j] = 0;
+        for (int i=0; i<N2; i++)
+            G[i][i] = 0;
+
+        string g = to_string(normalize(G));
+        for (int i=0; i<M; i++)
+            if (uniqueGraphs[N2][uniqueGraphs[N2].size()-i-1]==g)
+                return i;
+        return 0;
+    }
+};
+
 // トランスコーダーを使い分ける
 class TranscoderIntegrate: public Transcoder
 {
@@ -389,6 +585,7 @@ class TranscoderIntegrate: public Transcoder
     TranscoderEdge edge;
     TranscoderCluster3 cluster3;
     TranscoderExact exact;
+    TranscoderSuperGraph super;
 
 public:
     bool tuning = false;
@@ -404,6 +601,7 @@ public:
             case 1: trans = &edge; break;
             case 2: trans = &cluster3; break;
             case 3: trans = &exact; break;
+            case 4: trans = &super; break;
             }
         }
         else
@@ -457,6 +655,7 @@ public:
             case 1: trans = &edge; break;
             case 2: trans = &cluster3; break;
             case 3: trans = &exact; break;
+            case 4: trans = &super; break;
             }
         }
 
@@ -568,7 +767,7 @@ void param_search()
     TranscoderIntegrate transcoder;
     transcoder.tuning = true;
 
-    for (int ei=40; ei<=40; ei++)
+    for (int ei=0; ei<=40; ei++)
     {
         for (int M=10; M<=100; M++)
         {
@@ -577,7 +776,7 @@ void param_search()
             long long bestScore = 0;
             int bestID = 0;
 
-            for (int id=0; id<4; id++)
+            for (int id=0; id<5; id++)
             {
                 if (id==1)
                     if (!(ei>=35 || ei>=25 && 20<=M))
@@ -680,6 +879,8 @@ void make_graph()
 
 int main()
 {
+    my_exp_init();
+
     //param_search();
     //return 0;
 
@@ -690,6 +891,7 @@ int main()
     TranscoderEdge edge;
     TranscoderCluster3 cluster3;
     TranscoderExact exact;
+    TranscoderSuperGraph super;
     TranscoderIntegrate integrate;
     Transcoder *transcoder = &integrate;
 
