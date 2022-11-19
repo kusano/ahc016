@@ -252,6 +252,9 @@ public:
             int ei = int(e*100+.5);
             N = NT[ei/3][(M-10)/5];
             CSint = CSintT[ei/3][(M-10)/5];
+
+            N = 50;
+            CSint = 1;
         }
 
         // TODO: M種類のグラフを作れなくても、Nを小さくしたほうが良い場合もあるかも
@@ -327,6 +330,108 @@ public:
         for (int i=0; i<M; i++)
             if (abs(num[0]-CS[i][0])+abs(num[1]-CS[i][1]) <
                 abs(num[0]-CS[ans][0])+abs(num[1]-CS[ans][1]))
+                ans = i;
+        return ans;
+    }
+};
+
+// 4個のクラスタのサイズにエンコード
+class TranscoderCluster4: public Transcoder
+{
+    int M = 0;
+    double e = 0.;
+    vector<vector<int>> CS;
+
+public:
+    // パラメタを外部から与える
+    bool tuning = false;
+    int N = 0;
+
+    vector<vector<vector<int>>> init(int M, double e)
+    {
+        this->M = M;
+        this->e = e;
+
+        if (!tuning)
+        {
+            N = 50;
+        }
+
+        // TODO: M種類のグラフを作れなくても、Nを小さくしたほうが良い場合もあるかも
+        CS.clear();
+        while (true)
+        {
+            for (int i=1; i<N; i++)
+                for (int j=1; i+j<N; j++)
+                    for (int k=1; i+j+k<N; k++)
+                        if (i<=j && j<=k && k<=N-i-j-k)
+                            CS.push_back({i, j, k, N-i-j-k});
+            // 最小のクラスタが大きいほど良い
+            sort(CS.begin(), CS.end(), [](vector<int> &a, vector<int>&b) {
+                return a[0]>b[0] || a[0]==b[0] && a[1]>b[1] || a[0]==b[0] && a[1]==b[1] && a[2]>b[2];
+            });
+            if (tuning && (int)CS.size()<M)
+                return {};
+            if ((int)CS.size()>=M)
+                break;
+            N++;
+        }
+        CS.resize(M);
+
+        vector<vector<vector<int>>> G;
+        for (int m=0; m<M; m++)
+        {
+            vector<vector<int>> g(N, vector<int>(N));
+            for (int i=0; i<N; i++)
+                for (int j=0; j<i; j++)
+                    if (i<CS[m][0] && j<CS[m][0] ||
+                        CS[m][0]<=i && i<CS[m][0]+CS[m][1] && CS[m][0]<=j && j<CS[m][0]+CS[m][1] ||
+                        CS[m][0]+CS[m][1]<=i && i<CS[m][0]+CS[m][1]+CS[m][2] && CS[m][0]+CS[m][1]<=j && j<CS[m][0]+CS[m][1]+CS[m][2] ||
+                        CS[m][0]+CS[m][1]+CS[m][2]<=i && CS[m][0]+CS[m][1]+CS[m][2]<=j)
+                        g[i][j] = g[j][i] = 1;
+            G.push_back(g);
+        }
+
+        return G;
+    }
+
+    int decode(vector<vector<int>> H)
+    {
+        vector<int> C(N);
+
+        for (int iter=0; iter<16; iter++)
+        {
+            for (int i=0; i<N; i++)
+            {
+                int ms = -1;
+                int mc = 0;
+                for (int c=0; c<4; c++)
+                {
+                    int s = 0;
+                    for (int j=0; j<N; j++)
+                        if (j!=i)
+                            if (H[i][j]!=0 && c==C[j] ||
+                                H[i][j]==0 && c!=C[j])
+                                s++;
+                    if (s>ms)
+                    {
+                        ms = s;
+                        mc = c;
+                    }
+                }
+                C[i] = mc;
+            }
+        }
+
+        vector<int> num(4);
+        for (int i=0; i<N; i++)
+            num[C[i]]++;
+        sort(num.begin(), num.end());
+
+        int ans = 0;
+        for (int i=0; i<M; i++)
+            if (abs(num[0]-CS[i][0])+abs(num[1]-CS[i][1])+abs(num[2]-CS[i][2]) <
+                abs(num[0]-CS[ans][0])+abs(num[1]-CS[ans][1])+abs(num[2]-CS[ans][2]))
                 ans = i;
         return ans;
     }
@@ -682,9 +787,10 @@ int main()
     TranscoderFixed fixed;
     TranscoderEdge edge;
     TranscoderCluster3 cluster3;
+    TranscoderCluster4 cluster4;
     TranscoderExact exact;
     TranscoderIntegrate integrate;
-    Transcoder *transcoder = &integrate;
+    Transcoder *transcoder = &cluster4;
 
 #ifdef WIN32
     test(transcoder);
