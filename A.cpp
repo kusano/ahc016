@@ -421,8 +421,16 @@ class TranscoderSuperGraph: public Transcoder
     int N2 = 0;
     // 頂点あたりのノード数
     int VN = 0;
+    vector<vector<vector<int>>> UG;
 
     mt19937 rand;
+
+    vector<double> F;
+
+    double comb(int a, int b)
+    {
+        return F[a]-F[b]-F[a-b];
+    }
 
 public:
 
@@ -437,11 +445,18 @@ public:
         VN = 100/N2;
         N = VN*N2;
 
+        UG.clear();
+        for (string g: uniqueGraphs[N2])
+            UG.push_back(from_string(g));
+        for (int i=0; i<(int)UG.size(); i++)
+            swap(UG[i], UG[i+rand()%(UG.size()-i)]);
+        UG.resize(M);
+
         vector<vector<vector<int>>> G(M, vector<vector<int>>(N, vector<int>(N)));
 
         for (int m=0; m<M; m++)
         {
-            vector<vector<int>> H = from_string(uniqueGraphs[N2][uniqueGraphs[N2].size()-m-1]);
+            vector<vector<int>> H = UG[m];
 
             for (int i=0; i<N2; i++)
                 for (int j=0; j<VN; j++)
@@ -453,128 +468,112 @@ public:
                 G[m][i][i] = 0;
         }
 
+        F = vector<double>(N*N/2);
+        F[0] = 0.;
+        for (int i=1; i<N*N/2; i++)
+            F[i] = log(i)+F[i-1];
+
         return G;
     }
 
     int decode(vector<vector<int>> H)
     {
-        vector<int> C(N, -1);
-        for (int c=0; c<N2; c++)
+        // 辺の本数を推測
+        int c = 0;
+        for (int i=0; i<N; i++)
+            for (int j=0; j<i; j++)
+                c += H[i][j];
+        double e = max(0.01, this->e);
+
+        double maxp = -1.;
+        int edge_num = 0;
+        for (int i=0; i<=N2*(N2-1)/2; i++)
         {
-            vector<int> S(N);
-            for (int i=0; i<N; i++)
-                if (C[i]==-1)
-                {
-                    C[i] = c;
-                    S = H[i];
-                    break;
-                }
-            for (int i=1; i<VN; i++)
+            int c0 = i*VN*VN;
+            // c0 -> c となる確率
+            double p = 0.;
+            for (int j=0; j<=c0; j++)
             {
-                int mind = 99999999;
-                int minv = 0;
-                for (int j=0; j<N; j++)
-                    if (C[j]==-1)
-                    {
-                        int d = 0;
-                        for (int k=0; k<N; k++)
-                            d += abs(S[k]-H[j][k]*i);
-                        if (d<mind)
-                        {
-                            mind = d;
-                            minv = j;
-                        }
-                    }
-                C[minv] = c;
-                for (int j=0; j<N; j++)
-                    if (C[j]!=c)
-                        S[j] += H[minv][j];
-                S[minv] = 0;
+                int j2 = c-(c0-j);
+                if (0<=j2 && j2<=N*(N-1)/2-c0)
+                    p += exp(
+                        comb(c0, j)+log(e)*j+log(1.-e)*(c0-j)+
+                        comb(N*(N-1)/2-c0, j2)+log(e)*j2+log(1.-e)*(N*(N-1)/2-c0-j2));
+            }
+
+            if (p>maxp)
+            {
+                maxp = p;
+                edge_num = i;
             }
         }
 
-        vector<vector<int>> CM(N2, vector<int>(N2));
-        for (int i=0; i<N; i++)
-            for (int j=0; j<N; j++)
-                CM[C[i]][C[j]] += H[i][j];
-
-        int T = 1000;
-        for (int i=0; i<T; i++)
+        int ENC = 0;
+        for (int m=0; m<M; m++)
         {
-            int a = rand()%N;
-            int b = rand()%N;
-            if (C[a]==C[b])
+            vector<vector<int>> &G = UG[m];
+            int en = 0;
+            for (int i=0; i<N2; i++)
+                for (int j=0; j<i; j++)
+                    en += G[i][j];
+            if (en==edge_num)
+                ENC++;
+        }
+
+        int ms = 99999999;
+        int mv = 0;
+        for (int m=0; m<M; m++)
+        {
+            vector<vector<int>> &G = UG[m];
+            int en = 0;
+            for (int i=0; i<N2; i++)
+                for (int j=0; j<i; j++)
+                    en += G[i][j];
+            if (en!=edge_num)
                 continue;
 
-            int o = 0;
-            for (int j=0; j<N2; j++)
-            {
-                o += min(CM[C[a]][j], VN*VN-CM[C[a]][j]);
-                o += min(CM[C[b]][j], VN*VN-CM[C[b]][j]);
-            }
-            vector<int> Da(N2), Db(N2);
-            for (int j=0; j<N; j++)
-            {
-                Da[C[j]] -= H[a][j];
-                Db[C[j]] -= H[b][j];
-                Da[C[j]] += H[b][j];
-                Db[C[j]] += H[a][j];
-            }
-            int n = 0;
-            for (int j=0; j<N2; j++)
-            {
-                n += min(CM[C[a]][j]+Da[j], VN*VN-CM[C[a]][j]-Da[j]);
-                n += min(CM[C[b]][j]+Db[j], VN*VN-CM[C[b]][j]-Db[j]);
-            }
+            vector<int> C(N);
+            for (int i=0; i<N; i++)
+                C[i] = i%N2;
 
-            if (n<o ||
-                my_exp((double)((o-n)*T*10)/(T-i))>int(rand()&0x7fffffff))
+            int score = 0;
+            vector<vector<int>> CM(N2, vector<int>(N2));
+            for (int i=0; i<N; i++)
+                for (int j=0; j<i; j++)
+                    score += abs(G[C[i]][C[j]]-H[i][j]);
+
+            int T = 100000/ENC;
+            for (int i=0; i<T; i++)
             {
+                int a = rand()%N;
+                int b = rand()%N;
+                if (C[a]==C[b])
+                    continue;
+
+                int d = 0;
                 for (int j=0; j<N; j++)
                 {
-                    CM[C[a]][C[j]] -= H[a][j];
-                    CM[C[j]][C[a]] -= H[a][j];
-                    CM[C[b]][C[j]] -= H[b][j];
-                    CM[C[j]][C[b]] -= H[b][j];
+                    d -= abs(G[C[a]][C[j]]-H[a][j]);
+                    d += abs(G[C[a]][C[j]]-H[b][j]);
+                    d -= abs(G[C[b]][C[j]]-H[b][j]);
+                    d += abs(G[C[b]][C[j]]-H[a][j]);
                 }
-                swap(C[a], C[b]);
-                for (int j=0; j<N; j++)
+
+                if (d<0 ||
+                    my_exp((double)(-d*T)/(T-i))>int(rand()&0x7fffffff))
+                    //rand()%T>i)
                 {
-                    CM[C[a]][C[j]] += H[a][j];
-                    CM[C[j]][C[a]] += H[a][j];
-                    CM[C[b]][C[j]] += H[b][j];
-                    CM[C[j]][C[b]] += H[b][j];
+                    swap(C[a], C[b]);
+                    score += d;
                 }
+            }
+            if (score<ms)
+            {
+                ms = score;
+                mv = m;
             }
         }
-
-        //for (int i=0; i<N; i++)
-        //{
-        //    for (int j=0; j<N; j++)
-        //        cout<<" #"[H[i][j]];
-        //    cout<<endl;
-        //}
-        //cout<<endl;
-
-        vector<vector<int>> G(N2, vector<int>(N2));
-        for (int i=0; i<N; i++)
-            for (int j=0; j<N; j++)
-                if (H[i][j]!=0)
-                    G[C[i]][C[j]]++;
-        for (int i=0; i<N2; i++)
-            for (int j=0; j<N2; j++)
-                if (G[i][j]>=VN*VN/2)
-                    G[i][j] = 1;
-                else
-                    G[i][j] = 0;
-        for (int i=0; i<N2; i++)
-            G[i][i] = 0;
-
-        string g = to_string(normalize(G));
-        for (int i=0; i<M; i++)
-            if (uniqueGraphs[N2][uniqueGraphs[N2].size()-i-1]==g)
-                return i;
-        return 0;
+        return mv;
     }
 };
 
